@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AI Chat 导航</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #f4f6fb;
+    color: #1e293b;
+    min-height: 100vh;
+  }
+  header {
+    background: linear-gradient(135deg, #1e1b4b, #312e81, #4338ca);
+    color: #fff;
+    padding: 48px 24px 40px;
+    text-align: center;
+    position: relative;
+    overflow: hidden;
+  }
+  header::before {
+    content: '';
+    position: absolute;
+    top: -50%;
+    left: -50%;
+    width: 200%;
+    height: 200%;
+    background: radial-gradient(circle at 30% 50%, rgba(255,255,255,.04) 0%, transparent 60%);
+    pointer-events: none;
+  }
+  header h1 { font-size: 2rem; letter-spacing: 1px; }
+  header p { opacity: .75; margin-top: 6px; font-size: .92rem; }
+
+  .container { max-width: 1200px; margin: 0 auto; padding: 28px 16px 60px; }
+
+  /* 工具栏 */
+  .toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 24px;
+  }
+  .toolbar .count {
+    font-size: .85rem;
+    color: #64748b;
+    background: #fff;
+    padding: 6px 16px;
+    border-radius: 20px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.06);
+  }
+  .filter-group {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .filter-group button {
+    padding: 6px 18px;
+    border: 2px solid #e2e8f0;
+    background: #fff;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: .85rem;
+    color: #475569;
+    transition: all .15s;
+  }
+  .filter-group button:hover { border-color: #a5b4fc; color: #4338ca; }
+  .filter-group button.active {
+    border-color: #4338ca;
+    background: #4338ca;
+    color: #fff;
+  }
+
+  /* 搜索 */
+  .search-box {
+    margin-left: auto;
+    display: flex;
+    align-items: center;
+    background: #fff;
+    border-radius: 20px;
+    padding: 0 16px;
+    border: 2px solid #e2e8f0;
+    transition: border-color .15s;
+  }
+  .search-box:focus-within { border-color: #a5b4fc; }
+  .search-box input {
+    border: none;
+    outline: none;
+    padding: 8px 4px;
+    font-size: .85rem;
+    width: 180px;
+    background: transparent;
+  }
+  .search-box span { color: #94a3b8; font-size: .85rem; }
+
+  /* 网格 */
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
+    gap: 14px;
+  }
+  .grid.empty {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 200px;
+    color: #94a3b8;
+    font-size: .95rem;
+  }
+
+  .card {
+    background: #fff;
+    border-radius: 12px;
+    padding: 18px;
+    box-shadow: 0 1px 4px rgba(0,0,0,.05);
+    transition: transform .18s, box-shadow .18s, opacity .2s;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+  }
+  .card:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.08);
+  }
+
+  /* 选中状态 */
+  .card .check {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    width: 22px;
+    height: 22px;
+    border: 2px solid #cbd5e1;
+    border-radius: 6px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .15s;
+    font-size: .7rem;
+    color: transparent;
+  }
+  .card.selected { background: #eef2ff; outline: 2px solid #6366f1; }
+  .card.selected .check {
+    background: #6366f1;
+    border-color: #6366f1;
+    color: #fff;
+  }
+
+  .card .tag {
+    display: inline-block;
+    font-size: .7rem;
+    padding: 2px 10px;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    align-self: flex-start;
+    font-weight: 500;
+  }
+  .card .tag.cn { background: #fce7e7; color: #b91c1c; }
+  .card .tag.en { background: #dbeafe; color: #1d4ed8; }
+  .card .name { font-size: 1.05rem; font-weight: 600; margin-bottom: 4px; }
+  .card .desc { font-size: .8rem; color: #64748b; line-height: 1.5; flex: 1; margin-bottom: 12px; }
+  .card .actions { display: flex; gap: 8px; }
+  .card .actions a {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    text-decoration: none;
+    font-size: .82rem;
+    padding: 6px 14px;
+    border-radius: 8px;
+    background: #4338ca;
+    color: #fff;
+    transition: background .15s;
+  }
+  .card .actions a:hover { background: #3730a3; }
+  .card .actions a::after { content: "↗"; }
+
+  /* 底部已选栏 */
+  .selection-bar {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border-top: 1px solid #e2e8f0;
+    padding: 12px 24px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    box-shadow: 0 -4px 12px rgba(0,0,0,.06);
+    transform: translateY(100%);
+    transition: transform .25s;
+    z-index: 100;
+  }
+  .selection-bar.show { transform: translateY(0); }
+  .selection-bar .info { font-size: .85rem; color: #475569; }
+  .selection-bar .info strong { color: #4338ca; }
+  .selection-bar .chips {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    flex: 1;
+  }
+  .selection-bar .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    background: #eef2ff;
+    color: #4338ca;
+    padding: 4px 10px;
+    border-radius: 14px;
+    font-size: .78rem;
+  }
+  .selection-bar .chip .remove {
+    cursor: pointer;
+    font-weight: 700;
+    font-size: .85rem;
+    line-height: 1;
+    opacity: .6;
+    transition: opacity .15s;
+  }
+  .selection-bar .chip .remove:hover { opacity: 1; }
+  .selection-bar .btn-open {
+    padding: 8px 24px;
+    background: #4338ca;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .85rem;
+    transition: background .15s;
+    white-space: nowrap;
+  }
+  .selection-bar .btn-open:hover { background: #3730a3; }
+  .selection-bar .btn-clear {
+    padding: 8px 16px;
+    background: transparent;
+    color: #94a3b8;
+    border: 1px solid #e2e8f0;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: .82rem;
+    transition: all .15s;
+  }
+  .selection-bar .btn-clear:hover { color: #ef4444; border-color: #fca5a5; }
+
+  footer {
+    text-align: center;
+    padding: 24px;
+    color: #94a3b8;
+    font-size: .78rem;
+    padding-bottom: 80px;
+  }
+
+  @media (max-width: 700px) {
+    header h1 { font-size: 1.4rem; }
+    .toolbar { flex-direction: column; align-items: stretch; }
+    .search-box { margin-left: 0; }
+    .search-box input { width: 100%; }
+    .grid { grid-template-columns: 1fr; }
+    .selection-bar { flex-direction: column; align-items: stretch; padding: 12px 16px; }
+    .selection-bar .btn-open { text-align: center; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>🤖 AI Chat 导航</h1>
+  <p>国内外可直接在网页上对话的 AI 产品汇总 · 点击卡片可多选</p>
+</header>
+
+<div class="container">
+
+  <!-- 工具栏 -->
+  <div class="toolbar">
+    <span class="count" id="totalCount">共 <strong>38</strong> 个站点</span>
+    <div class="filter-group">
+      <button class="active" data-filter="all">全部</button>
+      <button data-filter="cn">🇨🇳 国内</button>
+      <button data-filter="en">🌍 国外</button>
+    </div>
+    <div class="search-box">
+      <span>🔍</span>
+      <input type="text" id="searchInput" placeholder="搜索名称或描述..." autocomplete="off">
+    </div>
+  </div>
+
+  <!-- 网格 -->
+  <div class="grid" id="grid"></div>
+
+</div>
+
+<!-- 底栏 -->
+<div class="selection-bar" id="selectionBar">
+  <div class="info">已选 <strong id="selCount">0</strong> 个</div>
+  <div class="chips" id="selChips"></div>
+  <button class="btn-clear" id="clearAll">清空</button>
+  <button class="btn-open" id="openAll">打开全部 ↗</button>
+</div>
+
+<footer>
+  数据仅供参考 · 点击卡片可选择 · 部分网站可能需要特殊网络环境
+</footer>
+
+<script>
+const sites = [
+  // 国内
+  { name:'DeepSeek',        desc:'深度求索出品，免费使用，支持超长上下文',                  url:'https://chat.deepseek.com',     cat:'cn' },
+  { name:'豆包',            desc:'字节跳动出品，支持多轮对话与插件',                        url:'https://www.doubao.com/chat',   cat:'cn' },
+  { name:'通义千问',        desc:'阿里巴巴出品，支持文档理解、代码生成',                    url:'https://tongyi.aliyun.com',     cat:'cn' },
+  { name:'文心一言',        desc:'百度出品，支持联网搜索与多模态',                          url:'https://yiyan.baidu.com',       cat:'cn' },
+  { name:'智谱清言 (ChatGLM)',desc:'智谱AI / 清华大学，支持多轮对话',                     url:'https://chatglm.cn',            cat:'cn' },
+  { name:'Kimi',            desc:'月之暗面出品，支持超长文本（20万字+）',                   url:'https://kimi.moonshot.cn',      cat:'cn' },
+  { name:'讯飞星火',        desc:'科大讯飞出品，支持语音、文档等',                          url:'https://xinghuo.xfyun.cn',      cat:'cn' },
+  { name:'百川智能',        desc:'百川出品，支持长上下文对话',                              url:'https://www.baichuan-ai.com/chat', cat:'cn' },
+  { name:'腾讯混元',        desc:'腾讯出品，支持多轮对话与工具调用',                        url:'https://hunyuan.tencent.com',   cat:'cn' },
+  { name:'天工AI',          desc:'昆仑万维出品，AI搜索+对话',                               url:'https://www.tiangong.cn',       cat:'cn' },
+  { name:'商量 (SenseChat)',desc:'商汤科技出品，多模态对话',                                url:'https://chat.sensetime.com',    cat:'cn' },
+  { name:'海螺AI (MiniMax)',desc:'MiniMax 出品，语音+文字对话',                             url:'https://hailuoai.com',          cat:'cn' },
+  { name:'零一万物 (Yi)',   desc:'李开复创办，支持长上下文',                                url:'https://www.lingyiwanwu.com',   cat:'cn' },
+  { name:'面壁智能 (CPM)',  desc:'面壁智能出品，开源模型对话',                              url:'https://chat.lmflow.com',       cat:'cn' },
+  { name:'元象 XVERSE',     desc:'元象科技出品，支持多轮对话',                              url:'https://chat.xverse.cn',        cat:'cn' },
+  { name:'360 智脑',        desc:'360 出品，支持联网搜索',                                  url:'https://ai.360.cn',             cat:'cn' },
+  { name:'有道子曰',        desc:'网易有道出品，支持学习辅助',                              url:'https://ai.youdao.com',         cat:'cn' },
+  { name:'华为盘古',        desc:'华为云出品，企业级对话',                                  url:'https://pangu.huawei.com',      cat:'cn' },
+  // 国外
+  { name:'ChatGPT',         desc:'OpenAI 出品，最流行的 AI 对话产品',                       url:'https://chatgpt.com',           cat:'en' },
+  { name:'Claude',          desc:'Anthropic 出品，擅长长文与安全对话',                      url:'https://claude.ai',             cat:'en' },
+  { name:'Gemini',          desc:'Google 出品，多模态能力强大',                             url:'https://gemini.google.com',     cat:'en' },
+  { name:'Grok',            desc:'xAI (马斯克) 出品，实时联网',                             url:'https://grok.com',              cat:'en' },
+  { name:'Perplexity',      desc:'AI 搜索引擎+对话，引用来源',                              url:'https://www.perplexity.ai',     cat:'en' },
+  { name:'Mistral Le Chat', desc:'法国 Mistral AI 出品',                                    url:'https://chat.mistral.ai',       cat:'en' },
+  { name:'Cohere Coral',    desc:'Cohere 出品，企业级对话',                                 url:'https://coral.cohere.com',      cat:'en' },
+  { name:'Pi (Inflection)', desc:'Inflection AI，主打情感陪伴',                              url:'https://pi.ai',                 cat:'en' },
+  { name:'Poe',             desc:'Quora 出品，聚合 GPT-4 / Claude 等多个模型',             url:'https://poe.com',               cat:'en' },
+  { name:'Character.AI',    desc:'角色扮演对话，自定义 AI 角色',                            url:'https://character.ai',          cat:'en' },
+  { name:'HuggingChat',     desc:'Hugging Face 出品，开源模型对话',                         url:'https://huggingface.co/chat',   cat:'en' },
+  { name:'You.com',         desc:'AI 搜索引擎 + 对话',                                      url:'https://you.com',               cat:'en' },
+  { name:'Jasper Chat',     desc:'Jasper 出品，偏向营销文案',                               url:'https://www.jasper.ai/chat',    cat:'en' },
+  { name:'DeepAI Chat',     desc:'DeepAI 出品，免费对话',                                   url:'https://deepai.org/chat',       cat:'en' },
+  { name:'LMSYS Chat',      desc:'开源模型竞技场，可对比多个模型',                          url:'https://chat.lmsys.org',        cat:'en' },
+  { name:'Phind',           desc:'面向开发者的 AI 搜索+对话',                               url:'https://www.phind.com',         cat:'en' },
+  { name:'Meta AI',         desc:'Meta 出品（部分地区可用）',                               url:'https://www.meta.ai',           cat:'en' },
+  { name:'GitHub Copilot',  desc:'GitHub 出品，代码对话助手',                               url:'https://github.com/features/copilot', cat:'en' },
+  { name:'Anthropic Console',desc:'Anthropic API 测试对话界面',                             url:'https://console.anthropic.com', cat:'en' },
+  { name:'xAI',             desc:'xAI 官网，早期 Grok',                                     url:'https://x.ai',                  cat:'en' },
+];
+
+/* ---------- 状态 ---------- */
+let filter = 'all';
+let keyword = '';
+const selected = new Set(); // 存 name
+
+const grid = document.getElementById('grid');
+const totalCount = document.getElementById('totalCount');
+const selCount = document.getElementById('selCount');
+const selChips = document.getElementById('selChips');
+const selectionBar = document.getElementById('selectionBar');
+
+/* ---------- 渲染 ---------- */
+function render() {
+  const kw = keyword.toLowerCase().trim();
+  const filtered = sites.filter(s => {
+    if (filter !== 'all' && s.cat !== filter) return false;
+    if (kw && !s.name.toLowerCase().includes(kw) && !s.desc.toLowerCase().includes(kw)) return false;
+    return true;
+  });
+
+  if (filtered.length === 0) {
+    grid.className = 'grid empty';
+    grid.innerHTML = '<span>😕 没有匹配的站点</span>';
+  } else {
+    grid.className = 'grid';
+    grid.innerHTML = filtered.map(s => `
+      <div class="card ${selected.has(s.name) ? 'selected' : ''}" data-name="${s.name}">
+        <div class="check">${selected.has(s.name) ? '✓' : ''}</div>
+        <span class="tag ${s.cat}">${s.cat === 'cn' ? '国内' : '国外'}</span>
+        <div class="name">${s.name}</div>
+        <div class="desc">${s.desc}</div>
+        <div class="actions">
+          <a href="${s.url}" target="_blank" rel="noopener" onclick="event.stopPropagation()">打开</a>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // 点击卡片切换选中
+  grid.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('click', () => {
+      const name = el.dataset.name;
+      if (selected.has(name)) selected.delete(name);
+      else selected.add(name);
+      render();
+      updateBar();
+    });
+  });
+
+  totalCount.innerHTML = `共 <strong>${sites.length}</strong> 个站点 · 显示 <strong>${filtered.length}</strong> 个`;
+}
+
+/* ---------- 底栏 ---------- */
+function updateBar() {
+  const arr = [...selected];
+  selCount.textContent = arr.length;
+  if (arr.length === 0) {
+    selectionBar.classList.remove('show');
+    return;
+  }
+  selectionBar.classList.add('show');
+  selChips.innerHTML = arr.map(n => {
+    const s = sites.find(x => x.name === n);
+    return `<span class="chip">${n} <span class="remove" data-name="${n}">×</span></span>`;
+  }).join('');
+  selChips.querySelectorAll('.remove').forEach(el => {
+    el.addEventListener('click', () => {
+      selected.delete(el.dataset.name);
+      render();
+      updateBar();
+    });
+  });
+}
+
+/* ---------- 过滤器 ---------- */
+document.querySelectorAll('.filter-group button').forEach(btn => {
+  btn.addEventListener('click', () => {
+    document.querySelector('.filter-group .active').classList.remove('active');
+    btn.classList.add('active');
+    filter = btn.dataset.filter;
+    render();
+  });
+});
+
+/* ---------- 搜索 ---------- */
+document.getElementById('searchInput').addEventListener('input', e => {
+  keyword = e.target.value;
+  render();
+});
+
+/* ---------- 清空 ---------- */
+document.getElementById('clearAll').addEventListener('click', () => {
+  selected.clear();
+  render();
+  updateBar();
+});
+
+/* ---------- 打开全部 ---------- */
+document.getElementById('openAll').addEventListener('click', () => {
+  const arr = [...selected];
+  if (arr.length === 0) return;
+  arr.forEach(n => {
+    const s = sites.find(x => x.name === n);
+    if (s) window.open(s.url, '_blank');
+  });
+});
+
+/* ---------- 初始化 ---------- */
+render();
+updateBar();
+</script>
+
+</body>
+</html>
